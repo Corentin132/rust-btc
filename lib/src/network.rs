@@ -39,7 +39,7 @@ pub enum Message {
     /// This is the response to DiscoverNodes
     NodeList(Vec<String>),
     /// Ask a node whats the highest block it knows about
-    /// in comparison to the local blockchain
+    /// in comparison to the local blockchain --> 🚨🚨🚨 TODO:: SHOULD BE USING A CONSENSUS ALGO INSTEAD TO AVOID  bogus attack with a node with a very long blockchains ....
     AskDifference(u32),
     /// This is the response to AskDifference
     Difference(i32),

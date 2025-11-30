@@ -31,3 +31,6 @@ pub const MIN_TARGET: U256 = U256([
 
 // maximum age of a transaction in the mempool in seconds -> btc 72h
 pub const MAX_MEMPOOL_TRANSACTION_AGE: u64 = 600;
+
+// maximum number of transactions in a block
+pub const BLOCK_TRANSACTION_CAP: usize = 20;
