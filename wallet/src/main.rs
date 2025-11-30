@@ -106,6 +106,13 @@ async fn run_cli(core: Arc<Core>) -> Result<()> {
                 println!("Transaction sent successfully");
                 core.fetch_utxos().await?;
             }
+            "help" => {
+                println!("Available commands:");
+                println!("  balance               - Show current balance");
+                println!("  send <recipient> <amount> - Send amount to recipient");
+                println!("  help                  - Show this help message");
+                println!("  exit                  - Exit the wallet");
+            }
             "exit" => break,
             _ => println!("Unknown command"),
         }

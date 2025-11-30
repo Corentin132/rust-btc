@@ -1,0 +1,13 @@
+default_node = "127.0.0.1:9000"
+
+[fee_config]
+fee_type = "Percent"
+value = 0.1
+
+[[contacts]]
+name = "Bob"
+key = "../miner/bob.pub.pem"
+
+[[my_keys]]
+public = "../miner/alice.pub.pem"
+private = "../miner/alice.priv.cbor"
