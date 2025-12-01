@@ -28,6 +28,8 @@ pub struct Blockchain {
     target: U256,
     #[serde(default, skip_serializing)]
     mempool: Vec<(DateTime<Utc>, Transaction)>,
+    #[serde(default, skip_serializing)]
+    orphan_children: HashMap<Hash, Vec<Block>>,
 }
 impl Blockchain {
     pub fn new() -> Self {
@@ -36,19 +38,27 @@ impl Blockchain {
             target: crate::MIN_TARGET,
             utxos: HashMap::new(),
             mempool: vec![],
+            orphan_children: HashMap::new(),
         }
     }
     pub fn add_block(&mut self, block: Block) -> Result<()> {
         if self.blocks.is_empty() {
             if block.header.prev_block_hash != Hash::zero() {
                 println!("zero hash");
-                return Err(BtcError::InvalidBlock);
+                self.orphan_children
+                    .entry(block.header.prev_block_hash)
+                    .or_default()
+                    .push(block);
+                return Ok(());
             }
         } else {
             let last_block = self.blocks.last().unwrap();
             if block.header.prev_block_hash != last_block.hash() {
-                println!("prev hash is wrong");
-                return Err(BtcError::InvalidBlock);
+                self.orphan_children
+                    .entry(block.header.prev_block_hash)
+                    .or_default()
+                    .push(block);
+                return Ok(());
             }
             // check if the block's hash is less than the target
             if !block.header.hash().matches_target(block.header.target) {
@@ -74,6 +84,9 @@ impl Blockchain {
             .retain(|(_, tx)| !block_transactions.contains(&tx.hash()));
         self.blocks.push(block);
         self.try_adjust_target();
+
+        let new_tip_hash = self.blocks.last().unwrap().hash();
+        self.process_orphans(new_tip_hash);
 
         Ok(())
     }
@@ -140,6 +153,29 @@ impl Blockchain {
         self.target = new_target.min(crate::MIN_TARGET);
     }
 
+    pub fn process_orphans(&mut self, parent_hash: Hash) {
+        let mut stack = vec![parent_hash];
+        while let Some(current_parent) = stack.pop() {
+            if let Some(children) = self.orphan_children.remove(&current_parent) {
+                for child in children {
+                    // Try to add each child. add_block may in turn call process_orphans
+                    // recursively when it succeeds. If it fails validation, we drop it
+                    // (or you can store it elsewhere for debugging).
+                    match self.add_block(child) {
+                        Ok(()) => {
+                            // child appended: push its hash to stack to process grandchildren
+                            let tip_hash = self.blocks.last().unwrap().hash();
+                            stack.push(tip_hash);
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to attach orphan child: {:?}", e);
+                            // If add_block fails (invalid merkle/target/etc.), we simply skip it.
+                        }
+                    }
+                }
+            }
+        }
+    }
     // mempool
     pub fn mempool(&self) -> &[(DateTime<Utc>, Transaction)] {
         // later, we will also need to keep track

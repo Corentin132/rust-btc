@@ -61,7 +61,7 @@ pub async fn handle_connection(mut socket: TcpStream) {
                 let mut blockchain = crate::BLOCKCHAIN.write().await;
                 println!("received new block");
                 if blockchain.add_block(block).is_err() {
-                    println!("block rejected");
+                    println!("New block rejected");
                 }
             }
             NewTransaction(tx) => {
@@ -88,7 +88,7 @@ pub async fn handle_connection(mut socket: TcpStream) {
                 let mut blockchain = crate::BLOCKCHAIN.write().await;
                 if let Err(e) = blockchain.add_block(block.clone()) {
                     println!("block rejected: {e}, closing connection");
-                    return;
+                    continue;
                 }
                 blockchain.rebuild_utxos();
                 println!("block looks good, broadcasting");
@@ -143,24 +143,45 @@ pub async fn handle_connection(mut socket: TcpStream) {
 
                 // 2. Calculate fees from these transactions
                 let mut miner_fees = 0;
-                for tx in &transactions {
+                let mut valid_transactions = Vec::new();
+
+                for tx in transactions {
                     let mut input_sum = 0;
                     let mut output_sum = 0;
+                    let mut is_valid = true;
+
                     for input in &tx.inputs {
                         if let Some((_, output)) =
                             blockchain.utxos().get(&input.prev_transaction_output_hash)
                         {
                             input_sum += output.value;
                         } else {
-                            eprintln!("Error: UTXO not found for transaction input");
-                            return;
+                            eprintln!(
+                                "Error: UTXO not found for transaction input. Skipping transaction."
+                            );
+                            is_valid = false;
+                            break;
                         }
                     }
+
+                    if !is_valid {
+                        continue;
+                    }
+
                     for output in &tx.outputs {
                         output_sum += output.value;
                     }
+
+                    if input_sum < output_sum {
+                        eprintln!("Error: Transaction inputs < outputs. Skipping transaction.");
+                        continue;
+                    }
+
                     miner_fees += input_sum - output_sum;
+                    valid_transactions.push(tx);
                 }
+
+                let mut transactions = valid_transactions;
 
                 let reward = blockchain.calculate_block_reward();
 
@@ -197,7 +218,10 @@ pub async fn handle_connection(mut socket: TcpStream) {
                 );
 
                 let message = Template(block);
-                message.send_async(&mut socket).await.unwrap();
+                if let Err(e) = message.send_async(&mut socket).await {
+                    println!("Failed to send template to miner: {}", e);
+                    return;
+                }
             }
         }
     }

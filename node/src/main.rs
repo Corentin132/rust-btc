@@ -36,13 +36,13 @@ async fn main() -> Result<()> {
     let port = args.port;
     let blockchain_file = args.blockchain_file;
     let nodes = args.nodes;
+    util::populate_connections(&nodes).await?;
+    println!("Total amount of known nodes: {}", NODES.len());
     if Path::new(&blockchain_file).exists() {
         println!("Loading blockchain from file: {}", blockchain_file);
         util::load_blockchain(&blockchain_file).await?;
     } else {
         println!("No existing blockchain found 😫, checking with other node .. ");
-        util::populate_connections(&nodes).await?;
-        println!("Total amount of known nodes: {}", NODES.len());
         if nodes.is_empty() {
             println!("no initial nodes provided, starting as a seed node 🤴");
         } else {
