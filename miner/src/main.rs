@@ -4,6 +4,7 @@ use btclib::network::Message;
 use btclib::types::Block;
 use btclib::util::Saveable;
 use clap::{Parser, arg, command};
+use num_cpus;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -46,7 +47,7 @@ impl Miner {
     }
 
     async fn run(&self) -> Result<()> {
-        self.spawn_mining_thread();
+        self.spawn_mining_threads();
 
         let mut template_interval = interval(Duration::from_secs(5));
 
@@ -64,26 +65,57 @@ impl Miner {
         }
     }
 
-    fn spawn_mining_thread(&self) -> thread::JoinHandle<()> {
+    fn spawn_mining_threads(&self) {
         let template = self.current_template.clone();
         let mining = self.mining.clone();
         let sender = self.mined_block_sender.clone();
 
-        thread::spawn(move || {
-            loop {
-                if mining.load(Ordering::Relaxed) {
-                    if let Some(mut block) = template.lock().unwrap().clone() {
-                        println!("Mining block with target: {}", block.header.target);
-                        if block.header.mine(2_000_000) {
-                            println!("Block mined: {}", block.hash());
-                            sender.send(block).expect("Failed to send mined block");
-                            mining.store(false, Ordering::Relaxed);
+        let num_threads = num_cpus::get();
+        println!("Spawning {} mining threads", num_threads);
+
+        for thread_id in 0..num_threads {
+            let template = template.clone();
+            let mining = mining.clone();
+            let sender = sender.clone();
+            thread::spawn(move || {
+                let step = num_threads as u32;
+                loop {
+                    if !mining.load(Ordering::Relaxed) {
+                        thread::yield_now();
+                        continue;
+                    }
+
+                    let maybe_block = template.lock().unwrap().clone();
+                    let mut block = match maybe_block {
+                        Some(b) => b,
+                        None => {
+                            thread::yield_now();
+                            continue;
                         }
+                    };
+
+                    let mut nonce = thread_id as u32;
+
+                    while mining.load(Ordering::Relaxed) {
+                        block.header.nonce = nonce;
+                        if block.header.hash().matches_target(block.header.target) {
+                            println!(
+                                "Thread {} mined a block with nonce {}, with hash {}",
+                                thread_id,
+                                nonce,
+                                block.header.hash()
+                            );
+                            if sender.send(block.clone()).is_err() {
+                                eprintln!("Failed to send mined block from thread {}", thread_id);
+                            }
+                            mining.store(false, Ordering::Relaxed);
+                            break;
+                        }
+                        nonce = nonce.wrapping_add(step);
                     }
                 }
-                thread::yield_now();
-            }
-        })
+            });
+        }
     }
 
     async fn fetch_and_validate_template(&self) -> Result<()> {

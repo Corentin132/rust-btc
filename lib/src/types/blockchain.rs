@@ -33,6 +33,10 @@ pub struct Blockchain {
 }
 impl Blockchain {
     pub fn new() -> Self {
+        println!(
+            "Creating new blockchain with min target {}",
+            crate::MIN_TARGET
+        );
         Blockchain {
             blocks: vec![],
             target: crate::MIN_TARGET,

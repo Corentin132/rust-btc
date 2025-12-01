@@ -22,8 +22,7 @@ impl Hash {
         let hash_bytes = hex::decode(hash).unwrap();
         let hash_array: [u8; 32] = hash_bytes.as_slice().try_into().unwrap();
 
-        // fix ::from_big_endian
-        Hash(U256::from_little_endian(&hash_array))
+        Hash(U256::from_big_endian(&hash_array))
     }
 
     // check if a hash matches a target
@@ -38,7 +37,7 @@ impl Hash {
 
     pub fn as_bytes(&self) -> [u8; 32] {
         // let mut bytes: Vec<u8> = vec![0; 32];
-        self.0.to_little_endian()
+        self.0.to_big_endian()
 
         // bytes.as_slice().try_into().unwrap()
     }

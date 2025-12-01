@@ -25,7 +25,7 @@ pub const MIN_TARGET: U256 = U256([
     0xFFFF_FFFF_FFFF_FFFF,
     0xFFFF_FFFF_FFFF_FFFF,
     0xFFFF_FFFF_FFFF_FFFF,
-    0x0000_FFFF_FFFF_FFFF,
+    0x0000_00FF_FFFF_FFFF,
 ]);
 // difficulty update interval in blocks
 
